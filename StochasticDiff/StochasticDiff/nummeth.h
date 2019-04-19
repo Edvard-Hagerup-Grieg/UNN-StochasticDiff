@@ -25,11 +25,6 @@
 using namespace std;
 
 
-double function(double x, double t, double a)
-{
-	return a - sin(x);
-}
-
 float gasdev(long *idum)
 {
 	float ran2(long *idum);
@@ -89,13 +84,15 @@ float ran2(long *idum)
 	else return temp;
 }
 
+
 double Euler(double a, double t0, double x0, double dt, int n, double D)
 {
 	srand(static_cast<unsigned int>(time(0)));
 	double start = 0, finish = 0;
 
 	long seed = (long)time(NULL);
-	float noise, norm;
+	float noise;
+
 	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt);
 	double *x = new double[n];
 	double *xt = new double[n];
@@ -112,10 +109,9 @@ double Euler(double a, double t0, double x0, double dt, int n, double D)
 	for (int i = 0; i < n; i++)
 	{
 		noise = gasdev(&seed);
-		norm = gasdev(&seed);
 
-		xt[i] = function(x[i], t, a) + sqD * noise;
-		x[i + 1] = dt * xt[i] + x[i] + sqD * sqdt * norm;
+		xt[i] = a - sin(x[i]) + sqD * noise;
+		x[i + 1] = dt * xt[i] + x[i] + sqD * sqdt * noise;
 
 		t += dt;
 	}
@@ -135,7 +131,8 @@ double Heun(double a, double t0, double x0, double dt, int n, double D)
 	double start = 0, finish = 0;
 
 	long seed = (long)time(NULL);
-	float noise, norm;
+	float noise;
+
 	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt), xeuler;
 	double *x = new double[n];
 	double *xt = new double[n];
@@ -146,11 +143,10 @@ double Heun(double a, double t0, double x0, double dt, int n, double D)
 	for (int i = 0; i < n; i++)
 	{
 		noise = gasdev(&seed);
-		norm = gasdev(&seed);
 
-		xt[i] = function(x[i], t, a) + sqD * noise;
-		xeuler = dt * xt[i] + x[i] + sqD * sqdt * norm;
-		x[i + 1] = dt * (xt[i] + function(xeuler, t + dt, a)) / 2. + x[i] + sqD * sqdt * norm;
+		xt[i] = a - sin(x[i]) + sqD * noise;
+		xeuler = dt * xt[i] + x[i] + sqD * sqdt * noise;
+		x[i + 1] = dt * (xt[i] + a - sin(xeuler)) / 2. + x[i] + sqD * sqdt * noise;
 
 		t += dt;
 	}
@@ -169,62 +165,6 @@ double Heun(double a, double t0, double x0, double dt, int n, double D)
 	return (finish - start);
 }
 
-double Heun_2(double a, double t0, double x0, double dt, int n, double D)
-{
-	srand(static_cast<unsigned int>(time(0)));
-	double start = 0, finish = 0, TIME = 0.0;
-
-	long seed = (long)time(NULL);
-	float noise, norm;
-	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt), xeuler;
-	double *x = new double[n];
-	double *xt = new double[n];
-
-	double *jump = new double[n];
-	int ITER = 100;
-
-	double pi = 3.1415;
-
-	for (int i = 0; i < n; i++)
-		jump[i] = 0;
-
-	string path = "C:\\Users\\Franz\\Desktop\\GitHub\\UNN-StochasticDiff\\results\\";
-	path = path + "Jump_mean_n" + to_string(n) + "_dt" + to_string(dt) + "_a" + to_string(a) + "_D" + to_string(D) + ".txt";
-
-	ofstream outfile;
-	outfile.open(path);
-
-	for (int iter = 0; iter < ITER; iter++)
-	{
-		start = omp_get_wtime();
-		x[0] = x0;
-
-		for (int i = 0; i < n; i++)
-		{
-			noise = gasdev(&seed);
-			norm = gasdev(&seed);
-
-			xt[i] = function(x[i], t, a) + sqD * noise;
-			xeuler = dt * xt[i] + x[i] + sqD * sqdt * norm;
-			x[i + 1] = dt * (xt[i] + function(xeuler, t + dt, a)) / 2. + x[i] + sqD * sqdt * norm;
-
-			if ((x[i + 1] < pi) && (x[i + 1] > -pi))
-				jump[i]++;
-
-			t += dt;
-		}
-		finish = omp_get_wtime();
-		TIME += (finish - start);
-	}
-
-	for (int i = 0; i < n; i++)
-		outfile << jump[i] / ITER << endl;
-
-	outfile.close();
-
-	return TIME / ITER;
-}
-
 double Jump(double a, double t0, double x0, double dt, int n, double D)
 {
 	srand(static_cast<unsigned int>(time(0)));
@@ -237,13 +177,13 @@ double Jump(double a, double t0, double x0, double dt, int n, double D)
 
 	double *jump = new double[n];
 	double pi = 3.1415;
-	int ITER = 100;
+	int ITER = 1000;
 
 	for (int i = 0; i < n; i++)
 		jump[i] = 0;
 
 	string path = "C:\\Users\\Franz\\Desktop\\GitHub\\UNN-StochasticDiff\\results\\";
-	path = path + "Jump_mean_n" + to_string(n) + "_dt" + to_string(dt) + "_a" + to_string(a) + "_D" + to_string(D) + ".txt";
+	path = path + "Jump_n" + to_string(n) + "_dt" + to_string(dt) + "_a" + to_string(a) + "_D" + to_string(D) + ".txt";
 
 	ofstream outfile;
 	outfile.open(path);
