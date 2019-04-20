@@ -7,6 +7,14 @@
 #include <fstream>
 #include <iostream>
 
+#include "mkl_vsl.h"
+
+#define ITER 1000
+#define PI 3.1415
+#define SEED 0
+#define METHOD  0
+#define BRNG VSL_BRNG_MT2203
+
 #define IM1 2147483563
 #define IM2 2147483399
 #define AM (1.0/IM1)
@@ -91,7 +99,7 @@ double Euler(double a, double t0, double x0, double dt, int n, double D)
 	double start = 0, finish = 0;
 
 	long seed = (long)time(NULL);
-	float noise;
+	double noise;
 
 	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt);
 	double *x = new double[n];
@@ -131,7 +139,7 @@ double Heun(double a, double t0, double x0, double dt, int n, double D)
 	double start = 0, finish = 0;
 
 	long seed = (long)time(NULL);
-	float noise;
+	double noise;
 
 	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt), xeuler;
 	double *x = new double[n];
@@ -168,16 +176,15 @@ double Heun(double a, double t0, double x0, double dt, int n, double D)
 double Jump(double a, double t0, double x0, double dt, int n, double D)
 {
 	srand(static_cast<unsigned int>(time(0)));
-	double start = 0, finish = 0, TIME = 0.0;
+	double start = 0, finish = 0;
 
-	long seed = (long)time(NULL);
 	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt);
 	double x, dx, xeuler;
-	float noise;
+
+	long seed = (long)time(NULL);
+	double noise;
 
 	double *jump = new double[n];
-	double pi = 3.1415;
-	int ITER = 1000;
 
 	for (int i = 0; i < n; i++)
 		jump[i] = 0;
@@ -188,9 +195,9 @@ double Jump(double a, double t0, double x0, double dt, int n, double D)
 	ofstream outfile;
 	outfile.open(path);
 
+	start = omp_get_wtime();
 	for (int iter = 0; iter < ITER; iter++)
 	{
-		start = omp_get_wtime();
 		x = x0;
 		for (int i = 0; i < n; i++)
 		{
@@ -200,20 +207,88 @@ double Jump(double a, double t0, double x0, double dt, int n, double D)
 			xeuler = x + dt*dx + sqD * sqdt * noise;
 			x = x + dt * (dx + a - sin(xeuler)) / 2. + sqD * sqdt * noise;
 
-			if ((x < pi) && (x > -pi))
+			if ((x < PI) && (x > -PI))
 				jump[i]++;
 
 			t += dt;
 		}
-		finish = omp_get_wtime();
-		TIME += (finish - start);
 	}
+	finish = omp_get_wtime();
 
 	for (int i = 0; i < n; i++)
 		outfile << jump[i] / ITER << endl;
 	outfile.close();
 
-	return TIME / ITER;
+	return (finish - start);
+}
+
+double Jump_vec(double a, double t0, double x0, double dt, int n, double D)
+{
+	srand(static_cast<unsigned int>(time(0)));
+	double start = 0, finish = 0;
+
+	double t = t0, sqD = sqrt(D), sqdt = sqrt(dt);
+	double x, dx, xeuler;
+
+	float *noise = new float[n];
+	float xmean = 0.0;
+	float sigma = 1.0;
+	int errcode;
+
+	double *jump = new double[n];
+	for (int i = 0; i < n; i++)
+		jump[i] = 0;
+
+	string path = "C:\\Users\\Franz\\Desktop\\GitHub\\UNN-StochasticDiff\\results\\";
+	path = path + "Jump_n" + to_string(n) + "_dt" + to_string(dt) + "_a" + to_string(a) + "_D" + to_string(D) + ".txt";
+
+	ofstream outfile;
+	outfile.open(path);
+
+	unsigned int  NT = 4;
+	omp_set_dynamic(0);
+	omp_set_num_threads(NT); 
+	VSLStreamStatePtr stream[8];
+
+	start = omp_get_wtime();
+#pragma omp parallel 
+	{
+		for (int m = 0; m <= (2 * NT - 1); m++)
+			vslNewStream(&stream[m], VSL_BRNG_MT2203 + m, SEED);
+
+		unsigned int CT;
+		CT = omp_get_thread_num();
+
+#pragma omp for
+		for (int iter = 0; iter < ITER; iter++)
+		{
+#pragma omp critical
+			{
+				errcode = vsRngGaussian(METHOD, stream[CT], n, noise, xmean, sigma);
+			}
+
+			x = x0;
+			for (int i = 0; i < n; i++)
+			{
+				dx = a - sin(x) + sqD * noise[i];
+
+				xeuler = x + dt * dx + sqD * sqdt * noise[i];
+				x = x + dt * (dx + a - sin(xeuler)) / 2. + sqD * sqdt * noise[i];
+
+				if ((x < PI) && (x > -PI))
+					jump[i]++;
+
+				t += dt;
+			}
+		}
+	}
+	finish = omp_get_wtime();
+
+	for (int i = 0; i < n; i++)
+		outfile << jump[i] / ITER << endl;
+	outfile.close();
+
+	return (finish - start);
 }
 
 
